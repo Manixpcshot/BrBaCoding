@@ -8,6 +8,7 @@ A polished, animated desktop AI workspace inspired by the reference screenshot, 
 - Model selection, streamed chat completions, configurable reasoning-effort hint, and a visible request-status indicator. The app intentionally does **not** expose hidden chain-of-thought returned by a model.
 - Local chat history, project grouping, image attachments, drag-and-drop, and text/code-file context for common text formats.
 - Memory control (send the full conversation, or only the latest six messages), a selectable permission-mode preference, and English/Persian labels.
+- Expanded settings for appearance themes/accent colors, reduced motion, app language, update preferences, workspace backups/import, storage location, and chat-history cleanup.
 - In the native app, workspace data is stored at Tauri's per-user app-data location (on Windows typically `%APPDATA%\com.brbacoding.agent\workspace.json`). In web preview it falls back to browser local storage.
 - A portable `BrBaCodingAgent.exe` is published as the primary Windows download. In-app update checking, signed update installation, and automatic relaunch are integrated.
 
