@@ -26,7 +26,14 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci
       - name: Build MSI and NSIS installers
-        run: npm run tauri build
+        shell: pwsh
+        run: |
+          npm run tauri build 2>&1 | Tee-Object -FilePath tauri-build.log
+          $buildExit = $LASTEXITCODE
+          if ($buildExit -ne 0) {
+            Select-String -Path tauri-build.log -Pattern '(?i)error|failed|not found|could not|exception' | Select-Object -Last 30 | ForEach-Object { Write-Output "::error::$($_.Line)" }
+          }
+          exit $buildExit
       - name: Publish this update as a GitHub pre-release
         uses: softprops/action-gh-release@v2
         with:
