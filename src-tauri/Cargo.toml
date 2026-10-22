@@ -1,0 +1,23 @@
+[package]
+name = "br-ba-coding-agent"
+version = "0.1.0"
+description = "Br Ba Coding Agent"
+authors = ["Br Ba Coding"]
+edition = "2021"
+build = "build.rs"
+
+[lib]
+name = "br_ba_coding_agent_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+futures-util = "0.3"
+url = "2"
