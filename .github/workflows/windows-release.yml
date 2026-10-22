@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   windows:
-    name: Windows installers
+    name: Windows portable app and update bundle
     runs-on: windows-latest
     steps:
       - name: Check out source
@@ -25,24 +25,61 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Install JavaScript dependencies
         run: npm ci
-      - name: Build MSI and NSIS installers
+      - name: Build portable EXE and signed updater bundle when configured
         shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          RELEASE_VERSION: 0.1.${{ github.run_number }}
+          RELEASE_TAG: v0.1.${{ github.run_number }}
         run: |
+          $confPath = "src-tauri/tauri.conf.json"
+          $conf = Get-Content $confPath -Raw | ConvertFrom-Json
+          $conf.version = $env:RELEASE_VERSION
+          $hasSigningKey = -not [string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)
+          if ($hasSigningKey) { $conf.bundle.createUpdaterArtifacts = "v1Compatible" }
+          else { $conf.bundle.createUpdaterArtifacts = $false }
+          $conf | ConvertTo-Json -Depth 100 | Set-Content $confPath -Encoding utf8
+          $cargoPath = "src-tauri/Cargo.toml"
+          $cargo = Get-Content $cargoPath -Raw
+          $cargo = $cargo -replace '(?m)^(version\s*=\s*")[^"]+("\s*)$', ('${1}' + $env:RELEASE_VERSION + '${2}')
+          Set-Content $cargoPath $cargo -Encoding utf8
           npm run tauri build 2>&1 | Tee-Object -FilePath tauri-build.log
           $buildExit = $LASTEXITCODE
           if ($buildExit -ne 0) {
             Select-String -Path tauri-build.log -Pattern '(?i)error|failed|not found|could not|exception' | Select-Object -Last 30 | ForEach-Object { Write-Output "::error::$($_.Line)" }
+            exit $buildExit
           }
-          exit $buildExit
-      - name: Publish this update as a GitHub pre-release
+          New-Item -ItemType Directory -Force -Path release-assets | Out-Null
+          Copy-Item "src-tauri/target/release/br-ba-coding-agent.exe" "release-assets/BrBaCodingAgent.exe"
+          if ($hasSigningKey) {
+            $updateZip = Get-ChildItem "src-tauri/target/release/bundle/nsis" -Filter "*.nsis.zip" | Select-Object -First 1
+            if (-not $updateZip) { throw "Signed NSIS updater archive was not produced." }
+            $signaturePath = "$($updateZip.FullName).sig"
+            if (-not (Test-Path $signaturePath)) { throw "Updater signature was not produced." }
+            $assetName = "BrBaCodingAgent-$($env:RELEASE_VERSION)-update.nsis.zip"
+            Copy-Item $updateZip.FullName "release-assets/$assetName"
+            $signature = (Get-Content $signaturePath -Raw).Trim()
+            $manifest = @{
+              version = $env:RELEASE_VERSION
+              notes = "Br Ba Coding Agent update $($env:RELEASE_VERSION)"
+              pub_date = [DateTime]::UtcNow.ToString("o")
+              platforms = @{
+                "windows-x86_64" = @{
+                  signature = $signature
+                  url = "https://github.com/Manixpcshot/BrBaCoding/releases/download/$($env:RELEASE_TAG)/$assetName"
+                }
+              }
+            }
+            $manifest | ConvertTo-Json -Depth 10 | Set-Content "release-assets/latest.json" -Encoding utf8
+          }
+      - name: Publish this version as a GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.1.0-build.${{ github.run_number }}
-          name: Br Ba Coding Agent · build ${{ github.run_number }}
+          tag_name: v0.1.${{ github.run_number }}
+          name: Br Ba Coding Agent v0.1.${{ github.run_number }}
           target_commitish: ${{ github.sha }}
-          prerelease: true
+          prerelease: false
           generate_release_notes: true
           fail_on_unmatched_files: true
-          files: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*.exe
+          files: release-assets/*

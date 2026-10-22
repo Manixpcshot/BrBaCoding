@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Activity, Archive, ArrowDown, ArrowLeft, ArrowUp, AudioLines, Bot, Brain, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsUpDown, CircleHelp, Clock3, Code2, Command, Copy, File, FilePlus2, Folder, FolderOpen, Image as ImageIcon, Languages, LayoutGrid, LockKeyhole, Menu, MessageCircle, MessageSquare, MoreHorizontal, Paperclip, PanelLeftClose, Plus, Search, Settings2, ShieldCheck, Sparkles, SquarePen, Trash2, UploadCloud, WandSparkles, X, Zap } from 'lucide-react';
+import '@fontsource-variable/manrope/wght.css';
+import '@fontsource/vazirmatn/400.css';
+import '@fontsource/vazirmatn/500.css';
+import '@fontsource/vazirmatn/600.css';
+import '@fontsource/vazirmatn/700.css';
 import './styles.css';
 
 type Provider = { id:string; name:string; baseUrl:string; apiKey:string; models:string[] };
@@ -19,12 +24,39 @@ async function loadWorkspace():Promise<Workspace>{
 }
 async function saveWorkspace(data:Workspace){try{if(isTauri()){const {invoke}=await import('@tauri-apps/api/core');await invoke('save_workspace',{workspace:data});}else localStorage.setItem('brba-workspace',JSON.stringify(data));}catch(e){console.error('Save failed',e)}}
 function App(){
-  const [ws,setWs]=useState<Workspace>(DEFAULT);const [ready,setReady]=useState(false);const [selectedChat,setSelectedChat]=useState('');const [query,setQuery]=useState('');const [input,setInput]=useState('');const [sending,setSending]=useState(false);const [settings,setSettings]=useState(false);const [searchOpen,setSearchOpen]=useState(false);const [newProvider,setNewProvider]=useState(false);const [providerDraft,setProviderDraft]=useState<Provider>({id:'',name:'OpenAI-compatible',baseUrl:'https://api.openai.com/v1',apiKey:'',models:[]});const [modelMenu,setModelMenu]=useState(false);const [effortMenu,setEffortMenu]=useState(false);const [projectMenu,setProjectMenu]=useState(false);const [projectModal,setProjectModal]=useState(false);const [projectName,setProjectName]=useState('');const [files,setFiles]=useState<{name:string;type:string;data:string}[]>([]);const [sidebarOpen,setSidebarOpen]=useState(true);const [toast,setToast]=useState('');const [activeTab,setActiveTab]=useState<'chat'|'work'>('work');const [fetching,setFetching]=useState(false);const fileRef=useRef<HTMLInputElement>(null);const inputRef=useRef<HTMLTextAreaElement>(null);const stateRef=useRef(ws);
+  const [ws,setWs]=useState<Workspace>(DEFAULT);const [ready,setReady]=useState(false);const [selectedChat,setSelectedChat]=useState('');const [query,setQuery]=useState('');const [input,setInput]=useState('');const [sending,setSending]=useState(false);const [settings,setSettings]=useState(false);const [searchOpen,setSearchOpen]=useState(false);const [newProvider,setNewProvider]=useState(false);const [providerDraft,setProviderDraft]=useState<Provider>({id:'',name:'OpenAI-compatible',baseUrl:'https://api.openai.com/v1',apiKey:'',models:[]});const [modelMenu,setModelMenu]=useState(false);const [effortMenu,setEffortMenu]=useState(false);const [projectMenu,setProjectMenu]=useState(false);const [projectModal,setProjectModal]=useState(false);const [projectName,setProjectName]=useState('');const [files,setFiles]=useState<{name:string;type:string;data:string}[]>([]);const [sidebarOpen,setSidebarOpen]=useState(true);const [toast,setToast]=useState('');const [activeTab,setActiveTab]=useState<'chat'|'work'>('work');const [fetching,setFetching]=useState(false);const [updateInfo,setUpdateInfo]=useState('');const fileRef=useRef<HTMLInputElement>(null);const inputRef=useRef<HTMLTextAreaElement>(null);const stateRef=useRef(ws);
   useEffect(()=>{loadWorkspace().then(data=>{setWs(data);setReady(true)});},[]);
   useEffect(()=>{const access=(e:any)=>patch({fullAccess:e.detail});const model=(e:any)=>patch({selectedProvider:e.detail.provider,selectedModel:e.detail.model});const effort=(e:any)=>patch({effort:e.detail});const toastEvent=(e:any)=>notify(e.detail);window.addEventListener('agent-access',access);window.addEventListener('select-model',model);window.addEventListener('set-effort',effort);window.addEventListener('toast',toastEvent);return()=>{window.removeEventListener('agent-access',access);window.removeEventListener('select-model',model);window.removeEventListener('set-effort',effort);window.removeEventListener('toast',toastEvent)}},[]);
   useEffect(()=>{stateRef.current=ws;if(ready){const timer=window.setTimeout(()=>saveWorkspace(ws),350);return()=>window.clearTimeout(timer)}},[ws,ready]);
   const chat=ws.chats.find(c=>c.id===selectedChat);const provider=ws.providers.find(p=>p.id===ws.selectedProvider);const rtl=ws.language==='fa';
   const t=(en:string,fa:string)=>rtl?fa:en;
+  useEffect(()=>{
+    if(!ready||!isTauri()||!import.meta.env.PROD)return;
+    let active=true;let checking=false;
+    const checkForUpdate=async()=>{
+      if(checking||!active)return;checking=true;
+      try{
+        setUpdateInfo(t('Checking for updates…','در حال بررسی به‌روزرسانی…'));
+        const {check}=await import('@tauri-apps/plugin-updater');
+        const update=await check();
+        if(!active)return;
+        if(!update){setUpdateInfo('');return;}
+        setUpdateInfo(t(`Downloading version ${update.version}…`,`در حال دریافت نسخهٔ ${update.version}…`));
+        let downloaded=0;let total=0;
+        await update.downloadAndInstall(event=>{
+          if(!active)return;
+          if(event.event==='Started'){total=event.data.contentLength||0;setUpdateInfo(t(`Downloading ${update.version}…`,`در حال دریافت ${update.version}…`));}
+          else if(event.event==='Progress'){downloaded+=event.data.chunkLength;if(total>0)setUpdateInfo(t(`Updating · ${Math.min(100,Math.round(downloaded/total*100))}%`,`به‌روزرسانی · ${Math.min(100,Math.round(downloaded/total*100))}٪`));}
+          else if(event.event==='Finished')setUpdateInfo(t('Restarting to finish update…','برای تکمیل به‌روزرسانی، برنامه دوباره اجرا می‌شود…'));
+        });
+        const {relaunch}=await import('@tauri-apps/plugin-process');await relaunch();
+      }catch(error){console.info('Automatic update check did not complete:',error);if(active)setUpdateInfo('');}
+      finally{checking=false;}
+    };
+    const first=window.setTimeout(checkForUpdate,6500);
+    const interval=window.setInterval(checkForUpdate,6*60*60*1000);
+    return()=>{active=false;window.clearTimeout(first);window.clearInterval(interval)};
+  },[ready,rtl]);
   const sortedChats=useMemo(()=>[...ws.chats].sort((a,b)=>b.updatedAt-a.updatedAt),[ws.chats]);
   const filtered=sortedChats.filter(c=>c.title.toLowerCase().includes(query.toLowerCase())&&(!ws.activeProject||c.projectId===ws.activeProject));
   const activeProject=ws.projects.find(p=>p.id===ws.activeProject);
@@ -97,7 +129,7 @@ function App(){
     </aside>}
     <main className="main">
       <header className="topbar">{!sidebarOpen&&<button className="topbar-icon" onClick={()=>setSidebarOpen(true)}><Menu size={17}/></button>}<div className="topbar-left"><button className="project-pill" onClick={()=>setProjectMenu(!projectMenu)}><FolderOpen size={15}/>{activeProject?.name||t('Workspace','فضای کاری')}<ChevronDown size={13}/></button>{projectMenu&&<div className="floating-menu project-menu"><button onClick={()=>{patch({activeProject:''});setProjectMenu(false)}}><LayoutGrid size={15}/>{t('All chats','همه گفتگوها')}</button>{ws.projects.map(p=><button key={p.id} onClick={()=>{patch({activeProject:p.id});setProjectMenu(false)}}><span className="project-dot" style={{background:p.color}}></span>{p.name}</button>)}<button onClick={()=>{setProjectMenu(false);setProjectModal(true)}}><Plus size={14}/>{t('New project','پروژه جدید')}</button></div>}</div>
-        <div className="tab-switch"><button className={activeTab==='chat'?'on':''} onClick={()=>setActiveTab('chat')}>{t('Chat','چت')}</button><button className={activeTab==='work'?'on':''} onClick={()=>setActiveTab('work')}>{t('Work','کار')}</button></div><div className="topbar-right"><button className="topbar-icon" title="Language" onClick={()=>patch({language:rtl?'en':'fa'})}><Languages size={16}/></button><button className="topbar-icon" title="Settings" onClick={()=>setSettings(true)}><Settings2 size={16}/></button><div className="mini-avatar">BB</div></div>
+        <div className="tab-switch"><button className={activeTab==='chat'?'on':''} onClick={()=>setActiveTab('chat')}>{t('Chat','چت')}</button><button className={activeTab==='work'?'on':''} onClick={()=>setActiveTab('work')}>{t('Work','کار')}</button></div><div className="topbar-right">{updateInfo&&<div className="update-status"><span className="update-spinner"/><span>{updateInfo}</span></div>}<button className="topbar-icon" title="Language" onClick={()=>patch({language:rtl?'en':'fa'})}><Languages size={16}/></button><button className="topbar-icon" title="Settings" onClick={()=>setSettings(true)}><Settings2 size={16}/></button><div className="mini-avatar">BB</div></div>
       </header>
       {chat&&activeTab==='chat'?<section className="conversation"><div className="conversation-head"><button className="back-btn" onClick={newChat}><ArrowLeft size={16}/></button><span>{chat.title}</span><button className="topbar-icon" onClick={()=>notify(t('Chat saved on this device','گفتگو روی این دستگاه ذخیره شد'))}><MoreHorizontal size={17}/></button></div><div className="messages">{chat.messages.map(m=><div className={`message ${m.role}`} key={m.id}>{m.role==='assistant'?<div className="assistant-avatar"><Sparkles size={15}/></div>:null}<div className="message-content">{m.thought&&<div className="think-line"><Brain size={14}/><span>{m.thought}</span><span className="thinking-dots"><i/><i/><i/></span></div>}{m.content&&<div className="message-text">{m.content}</div>}{m.files&&m.files.length>0&&<div className="attachment-list">{m.files.map((f,i)=><div className="attachment" key={i}>{f.type.startsWith('image/')?<img src={f.data} alt={f.name}/>:<File size={16}/>}<span>{f.name}</span></div>)}</div>}{m.role==='assistant'&&m.content&&!sending&&<div className="message-tools"><button onClick={()=>{navigator.clipboard?.writeText(m.content);notify(t('Copied','کپی شد'))}}><Copy size={14}/></button><button onClick={()=>notify(t('Saved to your local workspace','در فضای کاری ذخیره شد'))}><Archive size={14}/></button></div>}</div></div>)}</div><div className="chat-composer"><Composer {...{input,setInput,onKey,send,files,setFiles,fileRef,addFiles,inputRef,provider,ws,setModelMenu,setEffortMenu,modelMenu,effortMenu,fetching,refreshModels,t,rtl}}/></div></section>:<section className="home-view"><div className="greeting"><div className="greeting-orb"><span>BB</span><i className="orb-glow"/></div><h1>{t('What should we work on?','روی چی کار کنیم؟')}</h1><p>{t('Your AI coding workspace, built for the long haul.','فضای کاری هوش مصنوعی برای ساختن چیزهای بزرگ.')}</p></div><div className="composer-wrap"><Composer {...{input,setInput,onKey,send,files,setFiles,fileRef,addFiles,inputRef,provider,ws,setModelMenu,setEffortMenu,modelMenu,effortMenu,fetching,refreshModels,t,rtl}}/><div className="home-hints"><span><ShieldCheck size={14}/>{ws.memory?t('Memory on','حافظه روشن'):t('Memory off','حافظه خاموش')}</span><span><Zap size={13}/>{ws.fullAccess?t('Full access','دسترسی کامل'):t('Ask before actions','پرسش پیش از اقدام')}</span><span><LockKeyhole size={13}/>{t('Private on this device','خصوصی روی این دستگاه')}</span></div></div>{sortedChats.length>0&&<div className="recent-cards"><div className="recent-card-heading">{t('Pick up where you left off','ادامه گفتگو')}</div><div className="recent-card-row">{sortedChats.slice(0,3).map(c=><button className="recent-card" key={c.id} onClick={()=>openChat(c.id)}><MessageCircle size={15}/><span>{c.title}</span><ChevronRight size={14}/></button>)}</div></div>}</section>}
       <footer className="footer"><span>{t('Br Ba Coding Agent can make mistakes. Verify important changes.','Br Ba Coding Agent ممکن است اشتباه کند. تغییرات مهم را بررسی کنید.')}</span><button onClick={()=>setSettings(true)}><CircleHelp size={13}/>{t('Help & settings','راهنما و تنظیمات')}</button></footer>
